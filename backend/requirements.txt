@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+python-multipart
+pydantic-settings
+
+onnxruntime
+mediapipe
+opencv-python
+numpy
+
+celery
+redis
