@@ -14,7 +14,7 @@ class Emotion(BaseModel):
     label: str = Field(default="Undefined", min_length=3, max_length=20)
     probabilities: Dict[str, float] = Field(
         default_factory=lambda: {
-            "angry": 0.0,
+            "anger": 0.0,
             "disgust": 0.0,
             "fear": 0.0,
             "happy": 0.0,
@@ -37,11 +37,12 @@ class PhotoResponse(BaseModel):
      - _faces_num_ - количество лиц на изображении.
      - _emotions_ - словарь эмоций {'идентификатор лица': 'Объект эмоции'}
      - _process_time_ - время обработки кадра.
-
+     - _result_image_ - байтовое изображение резльутата.
     """
     faces_num: int = Field(default=0, ge=0)
     emotions: Dict[str, Emotion] = Field(default_factory=dict)
     process_time: float = Field(default=0., ge=0.)
+    result_image: str = Field(default="")
 
 class FrameData(BaseModel):
     """
@@ -52,7 +53,7 @@ class FrameData(BaseModel):
      - _frame_timestamp_ - временная метка кадра.
      - _frame_response_ - объект результата предсказания кадра (PhotoResponse).
     """
-    frame_timestamp: float = Field(default_factory=time.time)
+    frame_timestamp: float = Field(default=0., ge=0.)
     frame_response: PhotoResponse = Field(default_factory=PhotoResponse)
 
 class VideoResponse(BaseModel):
