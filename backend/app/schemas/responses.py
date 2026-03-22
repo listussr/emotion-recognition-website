@@ -66,4 +66,6 @@ class VideoResponse(BaseModel):
      - _response_ - Массив объектов предсказаний каждого кадра (FrameData).
     """
     processing_fps: float = Field(default=0., ge=0.)
-    response: List[FrameData] = Field(default_factory=list)
+    duration_sec: float = Field(default=0.0, ge=0.0)
+    total_frames_processed: int = Field(default=0, ge=0)
+    result_video: str = Field(default="")
