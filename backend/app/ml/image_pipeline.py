@@ -56,7 +56,7 @@ class ImageRecognizerPipeline(object):
                 'faces_num': 0,
                 'process_time': round(time.time() - start, 3),
                 'emotions': {},
-            }
+            }, detections
 
         emotions = {}
 
@@ -75,3 +75,5 @@ class ImageRecognizerPipeline(object):
             'process_time': round(time.time() - start, 3),
             'emotions': emotions,
         }, detections
+
+pipeline_image = ImageRecognizerPipeline()

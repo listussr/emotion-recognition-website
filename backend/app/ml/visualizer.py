@@ -36,7 +36,7 @@ def draw_annotations(image: np.ndarray, detections: List[Tuple], emotions: Dict[
         if face_key not in emotions:
             continue
 
-        x1, y1, w, h, _ = detection
+        x1, y1, w, h = detection[:4]
         x1, y1, x2, y2 = map(int, (x1, y1, x1 + w, y1 + h))
 
         emotion_data = emotions[face_key]
@@ -111,7 +111,7 @@ def draw_legend(height: int, emotions: Dict[str, Dict]) -> np.ndarray:
     return legend
 
 
-def annotate(image: np.ndarray, detections: List[Tuple], emotions: Dict[str, Dict]) -> bytes:
+def annotate_frame(image: np.ndarray, detections, emotions) -> np.ndarray:
     """
     Аннотирование изображения и отрисовка легенды.
     ---
@@ -130,11 +130,32 @@ def annotate(image: np.ndarray, detections: List[Tuple], emotions: Dict[str, Dic
         bytes: Финальная версия изображения с легендой.
     """
     if not detections or not emotions:
-        _, buffer = cv2.imencode('.jpg', image)
-        return buffer.tobytes()
-
+        legend = draw_legend(image.shape[0], emotions)
+        return np.hstack([image, legend])
+    
     annotated = draw_annotations(image.copy(), detections, emotions)
     legend = draw_legend(image.shape[0], emotions)
-    combined = np.hstack([annotated, legend])
+    return np.hstack([annotated, legend])
+
+
+def annotate(image: np.ndarray, detections: List[Tuple], emotions: Dict[str, Dict]) -> bytes:
+    """
+    Аннотирование изображения и отрисовка легенды.
+    ---
+
+    Происходит в 3 этапа:
+     1) Аннотирование лиц на картинке.
+     2) Отрисовка легенды.
+     3) Совмещение легенды и картинки.
+
+    Args:
+        image (np.ndarray): Исходное изображение.
+        detections (List[Tuple]): Список детекций.
+        emotions (Dict[str, Dict]): Словарь эмоций для каждого лица.
+
+    Returns:
+        bytes: Финальная версия изображения с легендой.
+    """
+    combined = annotate_frame(image, detections, emotions)
     _, buffer = cv2.imencode('.jpg', combined, [cv2.IMWRITE_JPEG_QUALITY, 90])
     return buffer.tobytes()
