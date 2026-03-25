@@ -12,7 +12,7 @@ from app.ml.visualizer import annotate_frame
 from app.ml.visualizer import LEGEND_WIDTH
 from app.ml.image_pipeline import pipeline_image
 from app.ml.face_embedder import FaceEmbedder
-from app.ml.statistics import build_statistics_html
+from app.ml.statistics import build_emotion_html
 
 class VideoPipeline(object):
     """
@@ -83,7 +83,7 @@ class VideoPipeline(object):
             else:
                 embeddings = np.empty((0, 512), dtype=np.float32)
 
-            tracker.update(valid_bboxes, result['emotions'], embeddings, timestamp)
+            tracker.update(valid_bboxes, result['emotions'], faces, embeddings, timestamp)
         else:
             tracker.predict()
 
@@ -176,14 +176,13 @@ class VideoPipeline(object):
         os.remove(output_path)
 
         tracks = list(session_tracks.values())
-        statistics_html = build_statistics_html(tracks) if tracks else ''
+        statistics_html = build_emotion_html(tracks, output_path="emotion_report.html")
 
         return {
             'processing_fps': processing_fps,
             'duration_sec': round(duration_sec, 2),
             'total_frames_processed': processed_frames,
             'result_video': base64.b64encode(video_bytes).decode('utf-8'),
-            '_tracks': tracks,
             'statistics_html': statistics_html,
         }
 

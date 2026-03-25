@@ -64,12 +64,13 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.dot(a, b) / (a_norm * b_norm))
 
 class Track:
-    __slots__ = ('id', 'bbox', 'velocity', 'age', 'emotion', 'history', 'embedding', 'identity_threshold', 'hits', 'confirmed')
+    __slots__ = ('id', 'bbox', 'image', 'velocity', 'age', 'emotion', 'history', 'embedding', 'identity_threshold', 'hits', 'confirmed')
 
     def __init__(
             self,
             track_id: int,
             bbox: CoordsXYWH,
+            image: np.ndarray,
             velocity: CoordsXYWH = (0.0, 0.0, 0.0, 0.0),
             age: int = 0,
             emotion: Dict = None,
@@ -92,6 +93,7 @@ class Track:
         self.bbox = bbox
         self.velocity = velocity
         self.age = age
+        self.image = image
         self.emotion = emotion or {}
         self.history = history or []
         self.embedding = embedding if embedding is not None else np.zeros(512, dtype=np.float32)
@@ -160,7 +162,7 @@ class Tracker:
         self._reid_threshold = reid_threshold
         self._confirmation_threshold = confirmation_threshold
 
-    def update(self, detections: List[CoordsXYWH], emotions: Dict[str, dict], embeddings: np.ndarray, timestamp: float = 0.0):
+    def update(self, detections: List[CoordsXYWH], emotions: Dict[str, dict], faces: List[np.ndarray], embeddings: np.ndarray, timestamp: float = 0.0):
         """
         Обновление реальных состояний треков.
         ---
@@ -179,7 +181,7 @@ class Tracker:
             for i, bbox in enumerate(detections):
                 emotion = emotions.get(f'face_{i}', {})
                 emb = embeddings[i] if len(embeddings) > i else np.zeros(512, dtype=np.float32)
-                track = Track(track_id=self._next_id, bbox=bbox, emotion=emotion, embedding=emb)
+                track = Track(track_id=self._next_id, bbox=bbox, emotion=emotion, embedding=emb, image=faces[i])
                 track.history.append({'timestamp': timestamp, 'emotion': emotion})
                 self.tracks.append(track)
                 self._next_id += 1
@@ -275,7 +277,7 @@ class Tracker:
             else:
                 emotion = emotions.get(f'face_{d_idx}', {})
                 emb = embeddings[d_idx] if len(embeddings) > d_idx else np.zeros(512, dtype=np.float32)
-                track = Track(track_id=self._next_id, bbox=bbox, emotion=emotion, embedding=emb)
+                track = Track(track_id=self._next_id, bbox=bbox, emotion=emotion, embedding=emb, image=faces[d_idx])
                 track.history.append({'timestamp': timestamp, 'emotion': emotion})
                 self.tracks.append(track)
                 self._next_id += 1
