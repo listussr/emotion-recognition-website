@@ -11,11 +11,13 @@ class Settings(BaseSettings):
     model_path_convnext: str = r'app\ml\models\convnext_gelu_head.onnx'
     model_path_swin: str = r'app\ml\models\swin_tiny.onnx'
     model_path_se_resnet: str = r'app\ml\models\resnet_18.onnx'
+    model_path_embedder: str = r'app\ml\models\w600k_mbf.onnx'
     video_classification_frequency: int = 5
-    tracker_iou_threshold: float = 0.3
-    tracker_max_age: int = 10
+    tracker_iou_threshold: float = 0.18
+    track_ttl: int = 12
     tracker_step: int = 7
     max_video_duration_sec: int = 30
     video_processing_timeout: int = 120
+    detection_confidence: float = 0.6
 
 settings = Settings()
