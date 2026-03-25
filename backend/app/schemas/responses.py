@@ -69,3 +69,4 @@ class VideoResponse(BaseModel):
     duration_sec: float = Field(default=0.0, ge=0.0)
     total_frames_processed: int = Field(default=0, ge=0)
     result_video: str = Field(default="")
+    statistics_html: str = Field(default="")

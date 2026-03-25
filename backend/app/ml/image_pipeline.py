@@ -3,6 +3,7 @@ import numpy as np
 from typing import Literal
 from .emotion_classifier import EmotionRecognizer
 from .face_detector import FaceDetector
+from .filters import fast_face_filter, pass_face_filters
 from app.config import settings
 
 _EMOTION_LABELS = ('anger', 'contempt', 'disgust', 'fear', 'happy', 'neutral', 'sad', 'surprise')
@@ -16,7 +17,7 @@ class ImageRecognizerPipeline(object):
      - predict(image, model['опционально']) - предсказание эмоции выбранной моделью по изображению.
     """
     def __init__(self):
-        self._detector = FaceDetector()
+        self._detector = FaceDetector(min_detection_confidence=settings.detection_confidence)
         self._classifiers = {
             'convnext':  EmotionRecognizer(settings.model_path_convnext),
             'swin':      EmotionRecognizer(settings.model_path_swin),
@@ -32,7 +33,8 @@ class ImageRecognizerPipeline(object):
             return ""
         return _EMOTION_LABELS[idx]
 
-    def predict(self, image: np.ndarray, model: Literal['convnext', 'se_resnet', 'swin'] = 'convnext') -> dict:
+    def predict(self, image: np.ndarray, model: Literal['convnext', 'se_resnet', 'swin'] = 'convnext',
+                use_fast_filter: bool = True, use_pass_pace_filter: bool = True) -> dict:
         """
         Предсказание эмоций на лицах.
         ---
@@ -46,7 +48,7 @@ class ImageRecognizerPipeline(object):
         """
         start = time.time()
 
-        detections = self._detector.detect(image)
+        detections = self._detector.detect(image, use_fast_filter, use_pass_pace_filter)
         faces = [
             image[y1:y1 + height, x1:x1 + width]
             for (x1, y1, width, height, _) in detections

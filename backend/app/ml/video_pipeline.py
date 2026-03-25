@@ -11,6 +11,8 @@ from app.ml.tracker import Tracker
 from app.ml.visualizer import annotate_frame
 from app.ml.visualizer import LEGEND_WIDTH
 from app.ml.image_pipeline import pipeline_image
+from app.ml.face_embedder import FaceEmbedder
+from app.ml.statistics import build_statistics_html
 
 class VideoPipeline(object):
     """
@@ -23,18 +25,19 @@ class VideoPipeline(object):
         ---
         """
         self._step = settings.video_classification_frequency
+        self._embedder = FaceEmbedder()
 
     def _get_tracker(self) -> Tracker:
         """
         Инициализация трекера.
         ---
         """
-        return Tracker(iou_threshold=settings.tracker_iou_threshold, track_ttl=settings.tracker_max_age, step=settings.tracker_step)
+        return Tracker(iou_threshold=settings.tracker_iou_threshold, track_ttl=settings.track_ttl, step=settings.tracker_step, reid_threshold=0.45)
 
-    def _process_frame(self, frame: np.ndarray, frame_idx: int, tracker: Tracker, model: str) -> np.ndarray:
+    def _process_frame(self, frame: np.ndarray, frame_idx: int, tracker: Tracker, model: str, timestamp: float = 0.0) -> np.ndarray:
         """
         Обработка и аннотация отдельного кадра.
-        ---
+        --- 
 
         Особенности анализа.
          1) Анализируется только каждый `k`-ый кадр.
@@ -50,9 +53,37 @@ class VideoPipeline(object):
             np.ndarray: Аннотированный кадр.
         """
         if frame_idx % self._step == 0:
-            result, detections = pipeline_image.predict(frame, model)
+            result, detections = pipeline_image.predict(frame, model, use_pass_pace_filter=False)
             bboxes = [d[:4] for d in detections]
-            tracker.update(bboxes, result['emotions'])
+
+            valid_bboxes = []
+            faces = []
+
+            for (x, y, w, h) in bboxes:
+                x = int(x)
+                y = int(y)
+                w = int(w)
+                h = int(h)
+
+                x = max(0, x)
+                y = max(0, y)
+                w = min(w, frame.shape[1] - x)
+                h = min(h, frame.shape[0] - y)
+
+                crop = frame[y:y + h, x:x + w]
+
+                if crop.size == 0:
+                    continue
+
+                valid_bboxes.append((x, y, w, h))
+                faces.append(crop)
+
+            if faces:
+                embeddings = self._embedder.encode(faces)
+            else:
+                embeddings = np.empty((0, 512), dtype=np.float32)
+
+            tracker.update(valid_bboxes, result['emotions'], embeddings, timestamp)
         else:
             tracker.predict()
 
@@ -84,11 +115,6 @@ class VideoPipeline(object):
         """
         cap = cv2.VideoCapture(tmp_file_path)
 
-        print(f"VideoCapture opened: {cap.isOpened()}")
-        print(f"Frame size: {int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))} x {int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))}")
-        print(f"FPS: {cap.get(cv2.CAP_PROP_FPS)}")
-        print(f"Total frames: {int(cap.get(cv2.CAP_PROP_FRAME_COUNT))}")
-
         if not cap.isOpened():
             raise ValueError(f"Не удалось открыть видео: {tmp_file_path}")
 
@@ -97,6 +123,8 @@ class VideoPipeline(object):
         duration_sec = total_frames / video_fps
         frame_w      = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         frame_h      = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+        session_tracks = {}
 
         if duration_sec > settings.max_video_duration_sec:
             cap.release()
@@ -124,8 +152,13 @@ class VideoPipeline(object):
                 if not ret:
                     break
 
-                annotated = self._process_frame(frame, frame_idx, tracker, model)
+                timestamp = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
+                annotated = self._process_frame(frame, frame_idx, tracker, model, timestamp)
                 writer.write(annotated)
+
+                for track in tracker.get_tracks():
+                    if track.history:
+                        session_tracks[track.id] = track
 
                 if frame_idx % self._step == 0:
                     processed_frames += 1
@@ -142,11 +175,16 @@ class VideoPipeline(object):
             video_bytes = f.read()
         os.remove(output_path)
 
+        tracks = list(session_tracks.values())
+        statistics_html = build_statistics_html(tracks) if tracks else ''
+
         return {
             'processing_fps': processing_fps,
             'duration_sec': round(duration_sec, 2),
             'total_frames_processed': processed_frames,
             'result_video': base64.b64encode(video_bytes).decode('utf-8'),
+            '_tracks': tracks,
+            'statistics_html': statistics_html,
         }
 
 pipeline_video = VideoPipeline()

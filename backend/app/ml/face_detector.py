@@ -5,6 +5,7 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 from typing import List, Tuple
 import logging
+from .filters import fast_face_filter, pass_face_filters
 
 class FaceDetector:
     """
@@ -49,7 +50,7 @@ class FaceDetector:
             area < 0.002 * frame_area or area > 0.5 * frame_area,
         ])
 
-    def detect(self, image: np.ndarray, ) -> List[Tuple[int, int, int, int, float]]:
+    def detect(self, image: np.ndarray, use_fast_filter: bool = False, use_pass_pace_filter: bool = False) -> List[Tuple[int, int, int, int, float]]:
         """
         Детекция лиц.
         ---
@@ -75,6 +76,8 @@ class FaceDetector:
         result = self._detector.detect(mp_image)
         detections = []
 
+        gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+
         if not result.detections:
             return detections
 
@@ -89,6 +92,16 @@ class FaceDetector:
 
             if not self._geometry_post_filters(height, width, orig_h, orig_w):
                 continue
+
+            crop = gray[y_min:y_min + height, x_min:x_min + width]
+
+            if use_fast_filter:
+                if not fast_face_filter(crop, width, height):
+                    continue
+
+            if use_pass_pace_filter:
+                if not pass_face_filters(crop, width, height):
+                    continue
 
             detections.append((x_min, y_min, width, height, conf))
 
