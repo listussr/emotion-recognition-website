@@ -9,10 +9,9 @@ EMOTIONS = ['anger', 'contempt', 'disgust', 'fear', 'happy', 'neutral', 'sad', '
 
 def build_emotion_html(tracks: List):
     """
-    Генерация HTML отчета с графиками эмоций для каждого трека.
-    Линейный график изменения эмоций во времени + круговая диаграмма средних эмоций + изображение лица.
+    Генерация html файла со статистикой по каждому треку.
+    ---
     """
-
     html_blocks = []
 
     for track in tracks:
