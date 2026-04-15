@@ -19,5 +19,8 @@ class Settings(BaseSettings):
     max_video_duration_sec: int = 30
     video_processing_timeout: int = 120
     detection_confidence: float = 0.6
+    reid_similarity: float = 0.4
+    embeddings_count: int = 15
+    confirmation_threshold: int = 5
 
 settings = Settings()

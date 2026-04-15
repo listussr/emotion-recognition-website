@@ -32,7 +32,14 @@ class VideoPipeline(object):
         Инициализация трекера.
         ---
         """
-        return Tracker(iou_threshold=settings.tracker_iou_threshold, track_ttl=settings.track_ttl, step=settings.tracker_step, reid_threshold=0.45)
+        return Tracker(
+            iou_threshold=settings.tracker_iou_threshold,
+            track_ttl=settings.track_ttl, 
+            step=settings.tracker_step,
+            reid_threshold=settings.reid_similarity,
+            embeddings_count=settings.embeddings_count,
+            confirmation_threshold=settings.confirmation_threshold
+        )
 
     def _process_frame(self, frame: np.ndarray, frame_idx: int, tracker: Tracker, model: str, timestamp: float = 0.0) -> np.ndarray:
         """
@@ -176,7 +183,7 @@ class VideoPipeline(object):
         os.remove(output_path)
 
         tracks = list(session_tracks.values())
-        statistics_html = build_emotion_html(tracks, output_path="emotion_report.html")
+        statistics_html = build_emotion_html(tracks)
 
         return {
             'processing_fps': processing_fps,
@@ -184,6 +191,7 @@ class VideoPipeline(object):
             'total_frames_processed': processed_frames,
             'result_video': base64.b64encode(video_bytes).decode('utf-8'),
             'statistics_html': statistics_html,
+            '_tracks': tracks
         }
 
 pipeline_video = VideoPipeline()
