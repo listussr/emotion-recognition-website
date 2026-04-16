@@ -28,5 +28,6 @@ class Settings(BaseSettings):
     pose_yaw_max: float = 0.25
     pose_roll_max: float = 20.0
     pose_min_face_px: int = 60
+    emotion_ema_alpha: float = 0.75
 
 settings = Settings()

@@ -48,6 +48,7 @@ class VideoPipeline(object):
             embedding_store_threshold=settings.embedding_store_threshold,
             embeddings_count=settings.embeddings_count,
             confirmation_threshold=settings.confirmation_threshold,
+            emotion_ema_alpha=settings.emotion_ema_alpha,
         )
 
     def _process_frame(self, frame: np.ndarray, frame_idx: int, tracker: Tracker, model: str, timestamp: float = 0.0,
