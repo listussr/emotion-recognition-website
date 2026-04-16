@@ -15,6 +15,7 @@ class FaceEmbedder(object):
         sess_options = ort.SessionOptions()
         sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
         sess_options.intra_op_num_threads = 2
+        sess_options.log_severity_level = 3
         self._session = ort.InferenceSession(
             settings.model_path_embedder,
             sess_options=sess_options,
