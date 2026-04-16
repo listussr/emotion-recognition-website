@@ -1,6 +1,6 @@
 import time
 import numpy as np
-from typing import Literal
+from typing import Dict, Literal, Optional
 from .emotion_classifier import EmotionRecognizer
 from .face_detector import FaceDetector
 from .filters import fast_face_filter, pass_face_filters
@@ -34,7 +34,8 @@ class ImageRecognizerPipeline(object):
         return _EMOTION_LABELS[idx]
 
     def predict(self, image: np.ndarray, model: Literal['convnext', 'se_resnet', 'swin'] = 'convnext',
-                use_fast_filter: bool = True, use_pass_pace_filter: bool = True) -> dict:
+                use_fast_filter: bool = True, use_pass_pace_filter: bool = True,
+                prof: Optional[Dict[str, float]] = None) -> dict:
         """
         Предсказание эмоций на лицах.
         ---
@@ -48,10 +49,13 @@ class ImageRecognizerPipeline(object):
         """
         start = time.time()
 
+        t0 = time.perf_counter() if prof is not None else 0.0
         detections = self._detector.detect(image, use_fast_filter, use_pass_pace_filter)
+        if prof is not None:
+            prof['detect'] += time.perf_counter() - t0
         faces = [
             image[y1:y1 + height, x1:x1 + width]
-            for (x1, y1, width, height, _) in detections
+            for (x1, y1, width, height, *_) in detections
         ]
         if not faces:
             return {
@@ -62,7 +66,10 @@ class ImageRecognizerPipeline(object):
 
         emotions = {}
 
+        t0 = time.perf_counter() if prof is not None else 0.0
         all_probs = self._classifiers[model].predict(faces)
+        if prof is not None:
+            prof['emotion'] += time.perf_counter() - t0
         for i, probs in enumerate(all_probs):
             prob_dict = dict(zip(_EMOTION_LABELS, probs.tolist()))
             label = max(prob_dict, key=prob_dict.get)

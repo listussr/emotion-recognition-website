@@ -209,3 +209,5 @@ __marimo__/
 *.onnx
 test_data/
 test.py
+.claude
+scripts/

@@ -19,8 +19,14 @@ class Settings(BaseSettings):
     max_video_duration_sec: int = 30
     video_processing_timeout: int = 120
     detection_confidence: float = 0.6
-    reid_similarity: float = 0.4
+    detection_max_short_side: int = 640
+    reid_similarity_active: float = 0.37
+    reid_similarity_gallery: float = 0.42
+    embedding_store_threshold: float = 0.42
     embeddings_count: int = 15
     confirmation_threshold: int = 5
+    pose_yaw_max: float = 0.25
+    pose_roll_max: float = 20.0
+    pose_min_face_px: int = 60
 
 settings = Settings()
