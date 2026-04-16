@@ -87,6 +87,11 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
 
 _EMA_ALPHA = 0.9  # вес старого прототипа в EMA-обновлении
 
+# Канонический порядок меток эмоций - должен совпадать с image_pipeline._EMOTION_LABELS
+_EMOTION_LABELS: Tuple[str, ...] = (
+    'anger', 'contempt', 'disgust', 'fear', 'happy', 'neutral', 'sad', 'surprise'
+)
+
 
 def proto_similarity(track: 'Track', query: np.ndarray) -> float:
     """
@@ -108,7 +113,8 @@ class Track:
     __slots__ = (
         'id', 'bbox', 'image', 'velocity', 'age', 'emotion',
         'history', 'embeddings', 'identity_threshold', 'hits',
-        'confirmed', 'gallery_age', 'bootstrap_count', 'proto'
+        'confirmed', 'gallery_age', 'bootstrap_count', 'proto',
+        'smooth_probs'
     )
 
     def __init__(
@@ -154,6 +160,42 @@ class Track:
             self.proto = (p / n) if n > 0 else None
         else:
             self.proto = None
+        self.smooth_probs: Optional[np.ndarray] = None
+
+    def apply_emotion_smoothing(self, raw_emotion: Dict, alpha: float,
+                                labels: Tuple[str, ...] = _EMOTION_LABELS) -> None:
+        """
+        EMA-сглаживание вектора вероятностей эмоций.
+        ---
+
+        Args:
+            raw_emotion (Dict): Сырой результат классификатора: {'label', 'is_detected', 'probabilities'}.
+            alpha (float): Коэффициент EMA в [0, 1]; 1.0 = полностью заморозить, 0.0 = без сглаживания.
+            labels (Tuple[str, ...]): Порядок меток для построения вектора вероятностей.
+        """
+        if not raw_emotion:
+            return
+        probs = raw_emotion.get('probabilities')
+        if not probs:
+            self.emotion = raw_emotion
+            return
+
+        new_vec = np.array([float(probs.get(lbl, 0.0)) for lbl in labels], dtype=np.float32)
+
+        if self.smooth_probs is None or self.smooth_probs.shape != new_vec.shape:
+            self.smooth_probs = new_vec
+        else:
+            a = float(np.clip(alpha, 0.0, 1.0))
+            self.smooth_probs = a * self.smooth_probs + (1.0 - a) * new_vec
+
+        idx = int(np.argmax(self.smooth_probs))
+        smoothed_label = labels[idx]
+        smoothed_probs = dict(zip(labels, self.smooth_probs.tolist()))
+        self.emotion = {
+            'label': smoothed_label,
+            'is_detected': bool(raw_emotion.get('is_detected', True)),
+            'probabilities': smoothed_probs,
+        }
 
     def move(self) -> CoordsXYWH:
         """
@@ -228,7 +270,8 @@ class Tracker:
         'tracks', '_iou_threshold', '_track_ttl', '_next_id', '_step',
         '_reid_threshold', '_reid_threshold_gallery', '_embedding_store_threshold',
         '_confirmation_threshold', '_embeddings_count',
-        '_track_gallery', '_gallery_ttl', '_unconfirmed_gallery_ttl'
+        '_track_gallery', '_gallery_ttl', '_unconfirmed_gallery_ttl',
+        '_emotion_ema_alpha'
     )
 
     def __init__(
@@ -243,6 +286,7 @@ class Tracker:
         embeddings_count: int = 7,
         gallery_ttl: int = 1500,
         unconfirmed_gallery_ttl: int = 750,
+        emotion_ema_alpha: float = 0.75,
     ):
         """
         Трекер лиц в видеопотоке.
@@ -275,6 +319,7 @@ class Tracker:
         self._track_gallery: List[Track] = []
         self._gallery_ttl = gallery_ttl
         self._unconfirmed_gallery_ttl = unconfirmed_gallery_ttl
+        self._emotion_ema_alpha = float(emotion_ema_alpha)
 
     def _add_embedding(self, track: Track, emb: np.ndarray):
         """
@@ -331,7 +376,13 @@ class Tracker:
             best_track.bbox = bbox
             best_track.age = 0
             best_track.gallery_age = 0
-            best_track.emotion = emotion
+            # Сброс EMA: после возвращения из галереи не хочется, чтобы старые
+            # вероятности эмоции смешивались с новым появлением.
+            best_track.smooth_probs = None
+            if emotion:
+                best_track.apply_emotion_smoothing(emotion, self._emotion_ema_alpha)
+            else:
+                best_track.emotion = {}
             self._add_embedding(best_track, emb)
             best_track.history.append({'timestamp': timestamp, 'emotion': best_track.emotion})
             if not best_track.confirmed:
@@ -388,7 +439,10 @@ class Tracker:
                 )
         track.bbox = new_bbox
         track.age = 0
-        track.emotion = emotions.get(f'face_{d_idx}', track.emotion)
+        raw_emotion = emotions.get(f'face_{d_idx}')
+        if raw_emotion:
+            track.apply_emotion_smoothing(raw_emotion, self._emotion_ema_alpha)
+        # если сырой эмоции нет - сохраняем предыдущее сглаженное значение
 
         self._add_embedding(track, new_emb)
 
@@ -439,11 +493,13 @@ class Tracker:
                 restored = self._restore_from_gallery(bbox, emb, emotion, timestamp, i) if emb is not None else None
                 if restored is None:
                     track = Track(
-                        track_id=self._next_id, bbox=bbox, emotion=emotion,
+                        track_id=self._next_id, bbox=bbox, emotion={},
                         embedding=emb, image=faces[i],
                         identity_threshold=self._reid_threshold
                     )
-                    track.history.append({'timestamp': timestamp, 'emotion': emotion})
+                    if emotion:
+                        track.apply_emotion_smoothing(emotion, self._emotion_ema_alpha)
+                    track.history.append({'timestamp': timestamp, 'emotion': track.emotion})
                     self.tracks.append(track)
                     self._next_id += 1
             return
@@ -518,11 +574,13 @@ class Tracker:
 
             # 3. Создаём новый трек.
             track = Track(
-                track_id=self._next_id, bbox=bbox, emotion=emotion,
+                track_id=self._next_id, bbox=bbox, emotion={},
                 embedding=emb, image=faces[d_idx],
                 identity_threshold=self._reid_threshold
             )
-            track.history.append({'timestamp': timestamp, 'emotion': emotion})
+            if emotion:
+                track.apply_emotion_smoothing(emotion, self._emotion_ema_alpha)
+            track.history.append({'timestamp': timestamp, 'emotion': track.emotion})
             self.tracks.append(track)
             self._next_id += 1
 
