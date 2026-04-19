@@ -11,14 +11,15 @@ from app.config import settings
 router = APIRouter()
 
 @router.post("/", response_model=VideoResponse)
-async def handle_video(file: UploadFile, model: Literal['convnext', 'swin', 'se_resnet'] = 'convnext'):
+async def handle_video(file: UploadFile,
+                       model: Literal['convnext', 'swin', 'resnet_50', 'efficientnet_b3'] = 'convnext'):
     """
     Эндпоинт для обработки видео.
     ---
 
     Args:
         file (UploadFile): Видео файл.
-        model (Literal[&#39;convnext&#39;, &#39;swin&#39;, &#39;se_resnet&#39;], optional): Название модели. Defaults to 'convnext'.
+        model (Literal[&#39;convnext&#39;, &#39;swin&#39;, &#39;resnet_50&#39;, &#39;efficientnet_b3&#39;], optional): Название модели. Defaults to 'convnext'.
 
     Raises:
         HTTPException: Ошибка формата - status=415.
@@ -44,14 +45,21 @@ async def handle_video(file: UploadFile, model: Literal['convnext', 'swin', 'se_
             detail=f"Файл слишком большой. Максимум: {settings.max_file_size_mb} МБ"
         )
 
+    # Write into a directory that is shared between backend and worker
+    # containers (see SHARED_TMP_DIR in docker-compose). Without this the
+    # worker cannot open the file — different containers don't share /tmp.
     tmp_path = None
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
+    with tempfile.NamedTemporaryFile(
+        delete=False,
+        suffix=".mp4",
+        dir=settings.shared_tmp_dir,  # None → system tempdir
+    ) as tmp:
         tmp.write(file_bytes)
         tmp_path = tmp.name
 
     try:
         task = process_video.delay(tmp_path, model)
-        result = task.get(timeout=60)
+        result = task.get(timeout=settings.video_processing_timeout)
     except CeleryTimeoutError:
         raise HTTPException(
             status_code=504,

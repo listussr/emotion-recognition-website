@@ -5,9 +5,10 @@ pydantic-settings
 
 onnxruntime
 mediapipe
-opencv-python
+opencv-python-headless
 numpy
 scipy
+plotly
 
 celery
 redis

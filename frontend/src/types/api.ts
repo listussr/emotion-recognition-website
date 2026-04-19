@@ -1,15 +1,14 @@
 export type ModelKey = 'resnet_50' | 'efficientnet_b3' | 'convnext' | 'swin';
 
 /**
- * Бэкенд принимает только три значения. Пока обучение четвёртой модели идёт,
- * клиент отправляет один из этих ключей в `?model=`. Мэппинг ниже сокращает
- * расхождение между UI-именами и именами бэкенда.
+ * Все четыре модели конвертированы в ONNX и доступны на бэкенде напрямую.
+ * Мэппинг оставлен 1:1 на случай будущих расхождений UI/бэкенд имён.
  */
-export type BackendModel = 'convnext' | 'swin' | 'se_resnet';
+export type BackendModel = 'convnext' | 'swin' | 'resnet_50' | 'efficientnet_b3';
 
 export const MODEL_TO_BACKEND: Record<ModelKey, BackendModel> = {
-  resnet_50: 'se_resnet',
-  efficientnet_b3: 'convnext',
+  resnet_50: 'resnet_50',
+  efficientnet_b3: 'efficientnet_b3',
   convnext: 'convnext',
   swin: 'swin',
 };

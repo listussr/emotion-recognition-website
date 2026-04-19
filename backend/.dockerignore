@@ -1,0 +1,29 @@
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.mypy_cache
+.venv
+venv
+env
+.env
+.env.*
+!.env.example
+
+# Тесты и тестовые данные в образ не попадают
+test.py
+test_data/
+
+# Исходники моделей в .pth — только ONNX попадают в рантайм
+app/ml/models/*.pth
+
+# IDE / OS мусор
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
