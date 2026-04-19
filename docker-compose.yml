@@ -1,0 +1,78 @@
+# Оркестрация всех сервисов проекта.
+# ---
+# Запуск:
+#     docker compose up --build
+# Остановка:
+#     docker compose down
+#
+# Сервисы:
+#   redis    - брокер и backend для Celery.
+#   backend  - FastAPI API, принимает запросы от nginx.
+#   worker   - Celery-воркер, использует тот же образ что backend.
+#   frontend - nginx + статика Vite, проксирует /api/ на backend.
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+    image: emotion-backend:latest
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://redis:6379
+      # Каталог для временных файлов
+      SHARED_TMP_DIR: /shared-uploads
+    volumes:
+      - shared-uploads:/shared-uploads
+    depends_on:
+      redis:
+        condition: service_healthy
+    expose:
+      - "8000"
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0 --port 8000
+      --workers 2
+
+  worker:
+    build:
+      context: ./backend
+    image: emotion-backend:latest
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://redis:6379
+      SHARED_TMP_DIR: /shared-uploads
+      # PIPELINE_PROFILE: "1"
+    volumes:
+      - shared-uploads:/shared-uploads
+    depends_on:
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    command: >
+      celery -A app.services.queue.celery_app worker
+      --loglevel=info
+      --pool=solo
+      -Q celery
+
+  frontend:
+    build:
+      context: ./frontend
+    image: emotion-frontend:latest
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+
+volumes:
+  shared-uploads:

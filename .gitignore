@@ -211,3 +211,4 @@ test_data/
 test.py
 .claude
 scripts/
+*.pth

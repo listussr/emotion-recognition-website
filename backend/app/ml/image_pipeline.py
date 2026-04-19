@@ -19,9 +19,10 @@ class ImageRecognizerPipeline(object):
     def __init__(self):
         self._detector = FaceDetector(min_detection_confidence=settings.detection_confidence)
         self._classifiers = {
-            'convnext':  EmotionRecognizer(settings.model_path_convnext),
-            'swin':      EmotionRecognizer(settings.model_path_swin),
-            'se_resnet': EmotionRecognizer(settings.model_path_se_resnet),
+            'convnext':        EmotionRecognizer(settings.model_path_convnext,        settings.model_input_size_convnext),
+            'swin':            EmotionRecognizer(settings.model_path_swin,            settings.model_input_size_swin),
+            'resnet_50':       EmotionRecognizer(settings.model_path_resnet_50,       settings.model_input_size_resnet_50),
+            'efficientnet_b3': EmotionRecognizer(settings.model_path_efficientnet_b3, settings.model_input_size_efficientnet_b3),
         }
 
     def _idx_to_label(self, idx: int) -> str:
@@ -33,7 +34,8 @@ class ImageRecognizerPipeline(object):
             return ""
         return _EMOTION_LABELS[idx]
 
-    def predict(self, image: np.ndarray, model: Literal['convnext', 'se_resnet', 'swin'] = 'convnext',
+    def predict(self, image: np.ndarray,
+                model: Literal['convnext', 'swin', 'resnet_50', 'efficientnet_b3'] = 'convnext',
                 use_fast_filter: bool = True, use_pass_pace_filter: bool = True,
                 prof: Optional[Dict[str, float]] = None) -> dict:
         """
@@ -42,7 +44,7 @@ class ImageRecognizerPipeline(object):
 
         Args:
             image (np.ndarray): Изображение для анализа.
-            model (Literal[&#39;convnext&#39;, &#39;se_resnet&#39;, &#39;swin&#39;], optional): Название модели. Defaults to 'convnext'.
+            model (Literal[&#39;convnext&#39;, &#39;swin&#39;, &#39;resnet_50&#39;, &#39;efficientnet_b3&#39;], optional): Название модели. Defaults to 'convnext'.
 
         Returns:
             dict: Словарь с данными о лицах, из эмоциях и аннотированное изображение.

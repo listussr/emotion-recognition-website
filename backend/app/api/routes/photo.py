@@ -9,14 +9,14 @@ from app.config import settings
 router = APIRouter()
 
 @router.post("/", response_model=PhotoResponse)
-async def handle_photo(file: UploadFile, model: Literal['convnext', 'swin', 'se_resnet'] = 'convnext'):
+async def handle_photo(file: UploadFile, model: Literal['convnext', 'swin', 'resnet_50', 'efficientnet_b3'] = 'convnext'):
     """
     Эндпоинт для обработки фотографий.
     ---
 
     Args:
         file (UploadFile): Файл изображения.
-        model (Literal[&#39;convnext&#39;, &#39;swin&#39;, &#39;se_resnet&#39;], optional): Название модели. Defaults to 'convnext'.
+        model (Literal[&#39;convnext&#39;, &#39;swin&#39;, &#39;resnet_50&#39;, &#39;efficientnet_b3&#39;], optional): Название модели. Defaults to 'convnext'.
 
     Raises:
         HTTPException: Ошибка формата - stauts=415.
@@ -44,7 +44,7 @@ async def handle_photo(file: UploadFile, model: Literal['convnext', 'swin', 'se_
 
     try:
         task = process_image.delay(file_bytes, model)
-        result = task.get(timeout=30)
+        result = task.get(timeout=settings.photo_processing_timeout)
     except CeleryTimeoutError:
         raise HTTPException(
             status_code=504,

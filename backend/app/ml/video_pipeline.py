@@ -1,5 +1,7 @@
 import cv2
 import base64
+import subprocess
+import shutil
 import tempfile
 import os
 import time
@@ -145,7 +147,7 @@ class VideoPipeline(object):
             prof['annotate'] += time.perf_counter() - t0
         return annotated
 
-    def process(self, tmp_file_path: str, model: Literal['convnext', 'swin', 'se_resnet'] = 'convnext') -> Dict:
+    def process(self, tmp_file_path: str, model: Literal['convnext', 'swin', 'resnet_50', 'efficientnet_b3'] = 'convnext') -> Dict:
         """
         Обротка и аннотирование видеопотока.
         ---
@@ -156,7 +158,7 @@ class VideoPipeline(object):
 
         Args:
             tmp_file_path (str): Путь к временному видео.
-            model (Literal[&#39;convnext&#39;, &#39;swin&#39;, &#39;se_resnet&#39;], optional): Название модели для обработки. Defaults to 'convnext'.
+            model (Literal[&#39;convnext&#39;, &#39;swin&#39;, &#39;resnet_50&#39;, &#39;efficientnet_b3&#39;], optional): Название модели для обработки. Defaults to 'convnext'.
 
         Raises:
             ValueError: Ошибка открытия файла.
@@ -264,9 +266,40 @@ class VideoPipeline(object):
                 pct = 100.0 * v / total_time if total_time > 0 else 0.0
                 print(f"  {k:>16s}: {v:7.2f}s  ({pct:5.1f}%)")
 
-        with open(output_path, 'rb') as f:
+        playable_path = output_path
+        ffmpeg_bin = shutil.which('ffmpeg')
+        if ffmpeg_bin is not None:
+            transcoded_path = tempfile.mktemp(suffix='.mp4')
+            try:
+                subprocess.run(
+                    [
+                        ffmpeg_bin, '-y',
+                        '-i', output_path,
+                        '-c:v', 'libx264',
+                        '-preset', 'veryfast',
+                        '-crf', '23',
+                        '-pix_fmt', 'yuv420p',
+                        '-movflags', '+faststart',
+                        '-an',
+                        transcoded_path,
+                    ],
+                    check=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE,
+                )
+                os.remove(output_path)
+                playable_path = transcoded_path
+            except subprocess.CalledProcessError as e:
+                # Перекодировка упала — откатываемся к mp4v. Логируем stderr,
+                # чтобы при регрессе было видно в docker logs.
+                print(f"[video_pipeline] ffmpeg transcode failed, "
+                      f"falling back to mp4v: {e.stderr.decode(errors='replace')}")
+                if os.path.exists(transcoded_path):
+                    os.remove(transcoded_path)
+
+        with open(playable_path, 'rb') as f:
             video_bytes = f.read()
-        os.remove(output_path)
+        os.remove(playable_path)
 
         tracks = list(session_tracks.values())
         statistics_html = build_emotion_html(tracks)
@@ -277,7 +310,6 @@ class VideoPipeline(object):
             'total_frames_processed': processed_frames,
             'result_video': base64.b64encode(video_bytes).decode('utf-8'),
             'statistics_html': statistics_html,
-            '_tracks': tracks
         }
 
 pipeline_video = VideoPipeline()
