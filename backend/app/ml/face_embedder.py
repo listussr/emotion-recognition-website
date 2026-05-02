@@ -1,3 +1,4 @@
+import os
 import cv2
 import numpy as np
 import onnxruntime as ort
@@ -5,6 +6,9 @@ from app.config import settings
 
 _MEAN = np.array([0.5, 0.5, 0.5], dtype=np.float32)
 _STD  = np.array([0.5, 0.5, 0.5], dtype=np.float32)
+
+_CPU = os.cpu_count() or 4
+_INTRA_THREADS = max(1, min(8, _CPU))
 
 class FaceEmbedder(object):
     """
@@ -14,10 +18,19 @@ class FaceEmbedder(object):
     def __init__(self):
         sess_options = ort.SessionOptions()
         sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-        sess_options.intra_op_num_threads = 2
+        sess_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+        sess_options.intra_op_num_threads = _INTRA_THREADS
         sess_options.log_severity_level = 3
+
+        model_path = settings.model_path_embedder
+        if settings.use_quantized_models:
+            base, ext = os.path.splitext(model_path)
+            int8_path = f"{base}_int8{ext}"
+            if os.path.exists(int8_path):
+                print(f"[FaceEmbedder] using INT8 model: {int8_path}")
+                model_path = int8_path
         self._session = ort.InferenceSession(
-            settings.model_path_embedder,
+            model_path,
             sess_options=sess_options,
             providers=['CPUExecutionProvider']
         )
