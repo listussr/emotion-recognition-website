@@ -54,7 +54,8 @@ class VideoPipeline(object):
         )
 
     def _process_frame(self, frame: np.ndarray, frame_idx: int, tracker: Tracker, model: str, timestamp: float = 0.0,
-                       prof: Optional[Dict[str, float]] = None) -> np.ndarray:
+                       prof: Optional[Dict[str, float]] = None,
+                       bbox_smooth: Optional[Dict[int, np.ndarray]] = None) -> np.ndarray:
         """
         Обработка и аннотация отдельного кадра.
         ---
@@ -112,20 +113,19 @@ class VideoPipeline(object):
                 aligned_faces.append(aligned)
                 quality_mask.append(bool(good))
 
-            # Эмбеддим все выровненные лица
-            if aligned_faces:
+            if not aligned_faces:
+                embeddings = []
+            elif settings.embed_skip_single_face and len(aligned_faces) == 1:
+                embeddings = [None]
+            else:
                 t0 = time.perf_counter() if prof is not None else 0.0
                 raw_embeddings = self._embedder.encode(aligned_faces)
                 if prof is not None:
                     prof['embed'] += time.perf_counter() - t0
-                # низкокачественные лица подаются как None и трекаются по IoU,
-                # но не участвуют в ReID-матчинге и не попадают в буфер треков.
                 embeddings: List[Optional[np.ndarray]] = [
                     (raw_embeddings[i] if quality_mask[i] else None)
                     for i in range(len(aligned_faces))
                 ]
-            else:
-                embeddings = []
 
             t0 = time.perf_counter() if prof is not None else 0.0
             tracker.update(valid_bboxes, result['emotions'], bbox_faces, embeddings, timestamp)
@@ -139,7 +139,29 @@ class VideoPipeline(object):
 
         tracks = tracker.get_tracks()
         emotions = {f'face_{i}': t.emotion for i, t in enumerate(tracks)}
-        bboxes_for_draw = [(t.bbox[0], t.bbox[1], t.bbox[2], t.bbox[3], 1.0) for t in tracks]
+
+        alpha = settings.bbox_smoothing_alpha
+        bboxes_for_draw = []
+        if bbox_smooth is None or alpha <= 0.0:
+            for t in tracks:
+                bboxes_for_draw.append((t.bbox[0], t.bbox[1], t.bbox[2], t.bbox[3], 1.0))
+        else:
+            active_ids = set()
+            for t in tracks:
+                target = np.asarray(t.bbox, dtype=np.float32)
+                prev = bbox_smooth.get(t.id)
+                if prev is None:
+                    smoothed = target
+                else:
+                    smoothed = alpha * prev + (1.0 - alpha) * target
+                bbox_smooth[t.id] = smoothed
+                active_ids.add(t.id)
+                bboxes_for_draw.append((int(smoothed[0]), int(smoothed[1]),
+                                         int(smoothed[2]), int(smoothed[3]), 1.0))
+            # Чистим записи мёртвых треков, чтобы dict не пух всё видео.
+            for tid in list(bbox_smooth.keys()):
+                if tid not in active_ids:
+                    bbox_smooth.pop(tid, None)
 
         t0 = time.perf_counter() if prof is not None else 0.0
         annotated = annotate_frame(frame, bboxes_for_draw, emotions)
@@ -172,11 +194,11 @@ class VideoPipeline(object):
         if not cap.isOpened():
             raise ValueError(f"Не удалось открыть видео: {tmp_file_path}")
 
-        video_fps    = cap.get(cv2.CAP_PROP_FPS) or 25.0
+        source_fps   = cap.get(cv2.CAP_PROP_FPS) or 25.0
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        duration_sec = total_frames / video_fps
-        frame_w      = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        frame_h      = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        duration_sec = total_frames / source_fps
+        src_w        = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        src_h        = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
         session_tracks = {}
 
@@ -187,21 +209,37 @@ class VideoPipeline(object):
                 f"Максимум: {settings.max_video_duration_sec} сек."
             )
 
+
+        max_short = settings.processing_max_short_side
+        if max_short and min(src_w, src_h) > max_short:
+            scale = max_short / float(min(src_w, src_h))
+            frame_w = int(round(src_w * scale))
+            frame_h = int(round(src_h * scale))
+        else:
+            scale = 1.0
+            frame_w, frame_h = src_w, src_h
+
+        decim = max(1, int(settings.video_frame_decimation))
+        output_fps = source_fps / decim
+
         output_path = tempfile.mktemp(suffix='.mp4')
 
         size = (frame_w + LEGEND_WIDTH, frame_h)
-        writer = cv2.VideoWriter(output_path, cv2.VideoWriter_fourcc(*'avc1'), video_fps, size)
+        writer = cv2.VideoWriter(output_path, cv2.VideoWriter_fourcc(*'avc1'), output_fps, size)
         if not writer.isOpened():
-            writer = cv2.VideoWriter(output_path, cv2.VideoWriter_fourcc(*'mp4v'), video_fps, size)
+            writer = cv2.VideoWriter(output_path, cv2.VideoWriter_fourcc(*'mp4v'), output_fps, size)
 
         tracker = self._get_tracker()
         frame_idx = 0
         processed_frames = 0
         start_time = time.time()
+        bbox_smooth: Dict[int, np.ndarray] = {}
 
         prof: Optional[Dict[str, float]] = defaultdict(float) if _PROFILE else None
         if _PROFILE:
-            print(f"[PROFILE] source: {frame_w}x{frame_h} @ {video_fps:.1f}fps, {total_frames} frames, "
+            print(f"[PROFILE] source: {src_w}x{src_h} @ {source_fps:.1f}fps, {total_frames} frames, "
+                  f"-> processing: {frame_w}x{frame_h} @ {output_fps:.1f}fps "
+                  f"(scale={scale:.2f}, decim={decim}), "
                   f"step={self._step}, detection_max_short_side={settings.detection_max_short_side}")
 
         frame_q: 'queue.Queue[Optional[tuple]]' = queue.Queue(maxsize=2)
@@ -209,6 +247,7 @@ class VideoPipeline(object):
 
         def _producer():
             try:
+                src_idx = 0
                 while True:
                     t0 = time.perf_counter() if prof is not None else 0.0
                     ret, frame = cap.read()
@@ -217,6 +256,17 @@ class VideoPipeline(object):
                     if not ret:
                         frame_q.put(None)
                         return
+
+                    if src_idx % decim != 0:
+                        src_idx += 1
+                        continue
+                    src_idx += 1
+
+                    if scale != 1.0:
+                        t0 = time.perf_counter() if prof is not None else 0.0
+                        frame = cv2.resize(frame, (frame_w, frame_h), interpolation=cv2.INTER_AREA)
+                        if prof is not None:
+                            prof['decode'] += time.perf_counter() - t0
                     ts = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
                     frame_q.put((frame, ts))
             except BaseException as e:
@@ -233,7 +283,8 @@ class VideoPipeline(object):
                     break
                 frame, timestamp = item
 
-                annotated = self._process_frame(frame, frame_idx, tracker, model, timestamp, prof=prof)
+                annotated = self._process_frame(frame, frame_idx, tracker, model, timestamp,
+                                                 prof=prof, bbox_smooth=bbox_smooth)
 
                 t0 = time.perf_counter() if prof is not None else 0.0
                 writer.write(annotated)

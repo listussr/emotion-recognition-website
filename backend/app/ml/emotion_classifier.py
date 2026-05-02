@@ -3,11 +3,30 @@ import cv2
 import numpy as np
 import onnxruntime as ort
 
+from app.config import settings
+
 _MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 _STD  = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
 _CPU = os.cpu_count() or 4
-_INTRA_THREADS = max(1, min(4, _CPU // 2))
+
+_INTRA_THREADS = max(1, min(8, _CPU))
+
+
+def _resolve_model_path(path: str) -> str:
+    """
+    Если включён флаг use_quantized_models и рядом с FP32-моделью лежит
+    INT8-вариант (`<stem>_int8.onnx`), возвращает путь к нему. Иначе —
+    исходный путь без изменений. Готовится скриптом
+    `backend/scripts/quantize_onnx.py`.
+    """
+    if not settings.use_quantized_models:
+        return path
+    base, ext = os.path.splitext(path)
+    int8_path = f"{base}_int8{ext}"
+    if os.path.exists(int8_path):
+        return int8_path
+    return path
 
 
 class EmotionRecognizer(object):
@@ -26,11 +45,15 @@ class EmotionRecognizer(object):
 
         sess_options = ort.SessionOptions()
         sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-        sess_options.execution_mode = ort.ExecutionMode.ORT_PARALLEL
-        sess_options.inter_op_num_threads = 2
+        sess_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
         sess_options.intra_op_num_threads = _INTRA_THREADS
+
+        sess_options.log_severity_level = 3
+        resolved_path = _resolve_model_path(model_path)
+        if resolved_path != model_path:
+            print(f"[EmotionRecognizer] using INT8 model: {resolved_path}")
         self._session = ort.InferenceSession(
-            model_path,
+            resolved_path,
             sess_options=sess_options,
             providers=['CPUExecutionProvider']
         )

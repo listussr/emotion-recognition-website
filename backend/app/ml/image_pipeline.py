@@ -18,12 +18,22 @@ class ImageRecognizerPipeline(object):
     """
     def __init__(self):
         self._detector = FaceDetector(min_detection_confidence=settings.detection_confidence)
-        self._classifiers = {
-            'convnext':        EmotionRecognizer(settings.model_path_convnext,        settings.model_input_size_convnext),
-            'swin':            EmotionRecognizer(settings.model_path_swin,            settings.model_input_size_swin),
-            'resnet_50':       EmotionRecognizer(settings.model_path_resnet_50,       settings.model_input_size_resnet_50),
-            'efficientnet_b3': EmotionRecognizer(settings.model_path_efficientnet_b3, settings.model_input_size_efficientnet_b3),
+        self._classifier_specs = {
+            'convnext':        (settings.model_path_convnext,        settings.model_input_size_convnext),
+            'swin':            (settings.model_path_swin,            settings.model_input_size_swin),
+            'resnet_50':       (settings.model_path_resnet_50,       settings.model_input_size_resnet_50),
+            'efficientnet_b3': (settings.model_path_efficientnet_b3, settings.model_input_size_efficientnet_b3),
         }
+        self._classifiers: dict[str, EmotionRecognizer] = {}
+
+    def _get_classifier(self, model: str) -> EmotionRecognizer:
+        """Ленивая инициализация ORT-сессии под запрошенную модель."""
+        clf = self._classifiers.get(model)
+        if clf is None:
+            path, input_size = self._classifier_specs[model]
+            clf = EmotionRecognizer(path, input_size)
+            self._classifiers[model] = clf
+        return clf
 
     def _idx_to_label(self, idx: int) -> str:
         """
@@ -69,7 +79,7 @@ class ImageRecognizerPipeline(object):
         emotions = {}
 
         t0 = time.perf_counter() if prof is not None else 0.0
-        all_probs = self._classifiers[model].predict(faces)
+        all_probs = self._get_classifier(model).predict(faces)
         if prof is not None:
             prof['emotion'] += time.perf_counter() - t0
         for i, probs in enumerate(all_probs):

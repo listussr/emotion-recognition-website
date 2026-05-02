@@ -50,7 +50,8 @@ services:
     environment:
       REDIS_URL: redis://redis:6379
       SHARED_TMP_DIR: /shared-uploads
-      # PIPELINE_PROFILE: "1"
+      PIPELINE_PROFILE: "1"
+      USE_QUANTIZED_MODELS: "0"
     volumes:
       - shared-uploads:/shared-uploads
     depends_on:

@@ -24,16 +24,21 @@ class Settings(BaseSettings):
     model_input_size_resnet_50:       int = 224
     model_input_size_efficientnet_b3: int = 300
 
-    video_classification_frequency: int = 5
+    video_classification_frequency: int = 8
     tracker_iou_threshold: float = 0.18
-    track_ttl: int = 12
+    track_ttl: int = 6
     tracker_step: int = 7
     max_video_duration_sec: int = 30
     video_processing_timeout: int = 120
 
     photo_processing_timeout: int = 120
     detection_confidence: float = 0.6
-    detection_max_short_side: int = 640
+    detection_max_short_side: int = 480
+    embed_skip_single_face: bool = True
+    use_quantized_models: bool = False
+    processing_max_short_side: int = 720
+    video_frame_decimation: int = 2
+    bbox_smoothing_alpha: float = 0.9
     reid_similarity_active: float = 0.37
     reid_similarity_gallery: float = 0.42
     embedding_store_threshold: float = 0.42
