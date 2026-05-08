@@ -15,7 +15,7 @@ from typing import Dict, List, Literal, Optional
 _PROFILE = os.environ.get('PIPELINE_PROFILE', '0') == '1'
 
 from app.config import settings
-from app.ml.tracker import Tracker
+from app.ml.byte_tracker import Tracker  # ByteTrack-обёртка под старый интерфейс
 from app.ml.visualizer import annotate_frame
 from app.ml.visualizer import LEGEND_WIDTH
 from app.ml.image_pipeline import pipeline_image
@@ -38,19 +38,18 @@ class VideoPipeline(object):
 
     def _get_tracker(self) -> Tracker:
         """
-        Инициализация трекера.
+        Инициализация ByteTrack-трекера.
         ---
         """
         return Tracker(
-            iou_threshold=settings.tracker_iou_threshold,
-            track_ttl=settings.track_ttl,
-            step=settings.tracker_step,
-            reid_threshold=settings.reid_similarity_active,
-            reid_threshold_gallery=settings.reid_similarity_gallery,
-            embedding_store_threshold=settings.embedding_store_threshold,
-            embeddings_count=settings.embeddings_count,
-            confirmation_threshold=settings.confirmation_threshold,
+            track_thresh=settings.bytetrack_track_thresh,
+            match_thresh=settings.bytetrack_match_thresh,
+            track_buffer=settings.bytetrack_track_buffer,
+            new_track_thresh=settings.bytetrack_new_track_thresh,
+            min_hits_to_confirm=settings.bytetrack_min_hits_to_confirm,
             emotion_ema_alpha=settings.emotion_ema_alpha,
+            reid_threshold=settings.bytetrack_reid_threshold,
+            gallery_size=settings.bytetrack_gallery_size,
         )
 
     def _process_frame(self, frame: np.ndarray, frame_idx: int, tracker: Tracker, model: str, timestamp: float = 0.0,
@@ -62,43 +61,41 @@ class VideoPipeline(object):
 
         Особенности анализа.
          1) Анализируется только каждый `k`-ый кадр.
-         2) На остальных `k-1` кадрах границы лиц предсказываются трекером.
-
-        Конвейер идентификации на детекционном кадре:
-         * 1: для каждой детекции берём 6 landmarks от MediaPipe и выравниваем
-               лицо к шаблону ArcFace (112x112). Выровненный кроп подаётся в эмбеддер.
-         * 2: по тем же landmarks считаем грубую оценку позы; если yaw/roll/размер
-               вне допусков — эмбеддинг не используется (в tracker.update идёт None).
-               Лицо при этом всё равно трекается по IoU.
-         * 3: для эмоций используется исходный bbox-кроп, не выровненное лицо.
+         2) На остальных `k-1` кадрах границы лиц двигаются Kalman-фильтром
+            (внутри ByteTrack) — рамка плавно «летит» в сторону движения,
+            а не залипает на последней детекции.
+         3) Эмоции считаются только на detection-кадре, на промежуточных
+            трек хранит EMA от последних апдейтов.
         """
         if frame_idx % self._step == 0:
             result, detections = pipeline_image.predict(frame, model, use_pass_pace_filter=False, prof=prof)
 
-            valid_bboxes: List = []
-            bbox_faces: List[np.ndarray] = []
+            frame_h, frame_w = frame.shape[:2]
+            bboxes_with_scores: List = []
+            emotions_per_det: List = []
+            bbox_crops: List = []
             aligned_faces: List[np.ndarray] = []
             quality_mask: List[bool] = []
-
-            frame_h, frame_w = frame.shape[:2]
-
-            for det in detections:
+            for i, det in enumerate(detections):
                 x, y, w, h = int(det[0]), int(det[1]), int(det[2]), int(det[3])
+                score = float(det[4]) if len(det) > 4 else 1.0
                 kps = det[5] if len(det) > 5 else []
 
                 x = max(0, x)
                 y = max(0, y)
                 w = min(w, frame_w - x)
                 h = min(h, frame_h - y)
-
-                bbox_crop = frame[y:y + h, x:x + w]
-                if bbox_crop.size == 0:
+                if w <= 0 or h <= 0:
                     continue
 
-                # выровнивание
+                bbox_crop = frame[y:y + h, x:x + w]
+                bboxes_with_scores.append((x, y, w, h, score))
+                bbox_crops.append(bbox_crop)
+
                 aligned = align_face(frame, kps) if kps else None
                 if aligned is None:
-                    aligned = cv2.resize(bbox_crop, (ARCFACE_SIZE, ARCFACE_SIZE), interpolation=cv2.INTER_LINEAR)
+                    aligned = cv2.resize(bbox_crop, (ARCFACE_SIZE, ARCFACE_SIZE),
+                                         interpolation=cv2.INTER_LINEAR)
                     good = False
                 else:
                     good, _ = pose_quality(
@@ -107,28 +104,24 @@ class VideoPipeline(object):
                         roll_max_deg=settings.pose_roll_max,
                         min_face_px=settings.pose_min_face_px,
                     )
-
-                valid_bboxes.append((x, y, w, h))
-                bbox_faces.append(bbox_crop)
                 aligned_faces.append(aligned)
                 quality_mask.append(bool(good))
 
-            if not aligned_faces:
-                embeddings = []
-            elif settings.embed_skip_single_face and len(aligned_faces) == 1:
-                embeddings = [None]
-            else:
+                em = result['emotions'].get(f'face_{i}')
+                emotions_per_det.append(em)
+
+            embeddings: List = []
+            if aligned_faces:
                 t0 = time.perf_counter() if prof is not None else 0.0
                 raw_embeddings = self._embedder.encode(aligned_faces)
                 if prof is not None:
                     prof['embed'] += time.perf_counter() - t0
-                embeddings: List[Optional[np.ndarray]] = [
-                    (raw_embeddings[i] if quality_mask[i] else None)
-                    for i in range(len(aligned_faces))
-                ]
+                embeddings = [raw_embeddings[i] for i in range(len(aligned_faces))]
 
             t0 = time.perf_counter() if prof is not None else 0.0
-            tracker.update(valid_bboxes, result['emotions'], bbox_faces, embeddings, timestamp)
+            tracker.update(bboxes_with_scores, emotions_per_det, timestamp,
+                          bbox_crops=bbox_crops, embeddings=embeddings,
+                          quality_mask=quality_mask)
             if prof is not None:
                 prof['tracker'] += time.perf_counter() - t0
         else:

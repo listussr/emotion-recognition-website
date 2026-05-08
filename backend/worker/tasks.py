@@ -54,10 +54,17 @@ def process_video(file_path: str, model: str = 'convnext') -> dict:
     try:
         return pipeline_video.process(file_path, model)
     except Exception as e:
+        # Печатаем трейсбек в stdout, чтобы он попал в `docker compose logs
+        # worker`. Без этого исключение возвращалось в поле `error` ответа,
+        # которое VideoResponse-схема выкидывает — и фронт получал пустой
+        # результат без шанса понять причину.
+        tb = traceback.format_exc()
+        print(f"[process_video] ERROR while processing {file_path} "
+              f"with model={model}:\n{tb}", flush=True)
         return {
             'processing_fps': 0.0,
             'duration_sec': 0.0,
             'total_frames_processed': 0,
             'result_video': '',
-            'error': traceback.format_exc()
+            'error': tb,
         }
