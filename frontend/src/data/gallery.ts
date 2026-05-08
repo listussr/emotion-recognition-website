@@ -1,73 +1,87 @@
 import type { GalleryItem } from '../types/models';
 
 /**
- * Временные демо-карточки — реальные медиа заменим после получения ассетов.
- * thumbnailGradient — CSS-градиент, используемый как плейсхолдер превью.
+ * Демо-карточки галереи — реальные результаты прогона пайплайна.
+ * Медиа лежит в `public/demo_data/...` и раздаётся как статика.
+ * Описания ассетов взяты из `description.md` каждой папки демо-набора.
  */
 export const GALLERY: GalleryItem[] = [
   {
-    id: 'demo-01',
-    title: 'Групповое фото — радостные лица',
+    id: 'demo-photo-1',
+    title: 'Презрение — ConvNeXt',
     kind: 'photo',
     model: 'convnext',
     modelName: 'ConvNeXt-Tiny',
-    thumbnailGradient: 'linear-gradient(135deg, #FFE0B2 0%, #FFB74D 60%, #FF9800 100%)',
     description:
-      'Пять человек улыбаются в кадре. Модель уверенно определяет доминирующую эмоцию радости.',
-    stats: { faces: 5, dominantEmotion: 'Радость' },
+      'ConvNeXt-Tiny уверенно классифицирует выражение как «презрение» — характерную асимметрию уголков губ.',
+    mediaUrl: '/demo_data/demo_photo_1/result.jpg',
+    thumbnailGradient: 'linear-gradient(135deg, #FFE0B2 0%, #FFB74D 60%, #FF9800 100%)',
+    stats: { faces: 1, dominantEmotion: 'Презрение', confidence: 55.1 },
   },
   {
-    id: 'demo-02',
-    title: 'Беседа — смена эмоций во времени',
-    kind: 'video',
+    id: 'demo-photo-2',
+    title: 'Презрение — Swin Transformer',
+    kind: 'photo',
     model: 'swin',
     modelName: 'Swin Transformer Tiny',
-    thumbnailGradient: 'linear-gradient(135deg, #CBD5FF 0%, #8B5CF6 60%, #4F7CFF 100%)',
     description:
-      'Диалог двух человек на 18 секунд. Видно, как эмоции плавно переходят от нейтральности к удивлению.',
-    stats: { duration: 18.4, faces: 2, dominantEmotion: 'Нейтральность' },
+      'Тот же класс эмоции, но Swin даёт заметно более высокую уверенность — трансформерная архитектура лучше ловит микро-мимику.',
+    mediaUrl: '/demo_data/demo_photo_2/result.jpg',
+    thumbnailGradient: 'linear-gradient(135deg, #CBD5FF 0%, #8B5CF6 60%, #4F7CFF 100%)',
+    stats: { faces: 1, dominantEmotion: 'Презрение', confidence: 75.3 },
   },
   {
-    id: 'demo-03',
-    title: 'Портрет — спокойное выражение',
+    id: 'demo-photo-3',
+    title: 'Грусть — ResNet-50',
     kind: 'photo',
-    model: 'efficientnet_b3',
-    modelName: 'EfficientNet-B3',
-    thumbnailGradient: 'linear-gradient(135deg, #E0F2FE 0%, #60A5FA 60%, #2563EB 100%)',
-    description: 'Одиночный портрет анфас. Классический пример нейтрального состояния.',
-    stats: { faces: 1, dominantEmotion: 'Нейтральность' },
-  },
-  {
-    id: 'demo-04',
-    title: 'Реакция на новости — удивление',
-    kind: 'video',
     model: 'resnet_50',
     modelName: 'ResNet-50',
-    thumbnailGradient: 'linear-gradient(135deg, #FEE2E2 0%, #FCA5A5 60%, #EF4444 100%)',
-    description: 'Короткий ролик 12 секунд. Яркий переход от нейтральности к удивлению.',
-    stats: { duration: 12.1, faces: 1, dominantEmotion: 'Удивление' },
-  },
-  {
-    id: 'demo-05',
-    title: 'Разнообразие поз и ракурсов',
-    kind: 'photo',
-    model: 'swin',
-    modelName: 'Swin Transformer Tiny',
-    thumbnailGradient: 'linear-gradient(135deg, #E9D5FF 0%, #C084FC 60%, #7C3AED 100%)',
     description:
-      'Несколько лиц под разными углами. Проверка устойчивости модели к повороту головы.',
-    stats: { faces: 3, dominantEmotion: 'Радость' },
+      'ResNet-50 на размытом портрете определяет «грусть» с умеренной уверенностью — пограничный случай между нейтральностью и грустью.',
+    mediaUrl: '/demo_data/demo_photo_3/result.jpg',
+    thumbnailGradient: 'linear-gradient(135deg, #E0F2FE 0%, #60A5FA 60%, #2563EB 100%)',
+    stats: { faces: 1, dominantEmotion: 'Грусть', confidence: 49.6 },
   },
   {
-    id: 'demo-06',
-    title: 'Динамическая сцена — трекинг лиц',
+    id: 'demo-video-1',
+    title: '«Карты, деньги, два ствола» — сцена в самоанском пабе',
     kind: 'video',
     model: 'convnext',
     modelName: 'ConvNeXt-Tiny',
-    thumbnailGradient: 'linear-gradient(135deg, #D1FAE5 0%, #6EE7B7 60%, #10B981 100%)',
     description:
-      'Активное движение в кадре. Хороший пример работы трекера через кратковременные окклюзии.',
-    stats: { duration: 22.8, faces: 4, dominantEmotion: 'Радость' },
+      'Джейсон Стэтхэм сидит в самоанском пабе. Короткая сцена — три лица, статичная камера, подходящий пример для базовой проверки трекинга.',
+    mediaUrl: '/demo_data/demo_video_1/result.mp4',
+    statisticsUrl: '/demo_data/demo_video_1/statistics.html',
+    stats: { duration: 11, faces: 3, dominantEmotion: 'Различные эмоции' },
+  },
+  {
+    id: 'demo-video-2',
+    title: '«Джентльмены» — напряжённая поездка',
+    kind: 'video',
+    model: 'convnext',
+    modelName: 'ConvNeXt-Tiny',
+    description:
+      'Напряжённая поездка в автомобиле. Длинная сцена с тремя лицами — хорошо видно, как трекер удерживает идентичность через смены ракурса.',
+    mediaUrl: '/demo_data/demo_video_2/result.mp4',
+    statisticsUrl: '/demo_data/demo_video_2/statistics.html',
+    stats: { duration: 27, faces: 3, dominantEmotion: 'Различные эмоции' },
+  },
+  {
+    id: 'demo-video-3',
+    title: '«Большой куш» — монолог про свиней',
+    kind: 'video',
+    model: 'convnext',
+    modelName: 'ConvNeXt-Tiny',
+    description:
+      'Монолог про свиней. Демонстрация того, как окклюзии (руки, объекты в кадре, частичные перекрытия лица) влияют на распознавание эмоций.',
+    mediaUrl: '/demo_data/demo_video_3/result.mp4',
+    statisticsUrl: '/demo_data/demo_video_3/statistics.html',
+    stats: {
+      duration: 27,
+      faces: 3,
+      dominantEmotion: 'Различные эмоции',
+      note: 'Демонстрирует влияние окклюзий на распознавание эмоций',
+    },
   },
 ];
 

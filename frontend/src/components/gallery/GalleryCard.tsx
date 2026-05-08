@@ -8,6 +8,11 @@ interface GalleryCardProps {
   index?: number;
 }
 
+/**
+ * Карточка превью в галерее. Для фото показывает само изображение;
+ * для видео — `<video preload="metadata">` без controls (браузер
+ * нарисует первый кадр в качестве постера, поверх — иконка play).
+ */
 export function GalleryCard({ item, index = 0 }: GalleryCardProps) {
   return (
     <motion.div
@@ -18,10 +23,27 @@ export function GalleryCard({ item, index = 0 }: GalleryCardProps) {
       <Link to={`/gallery/${item.id}`} className="block h-full">
         <div className="card-interactive h-full overflow-hidden flex flex-col">
           <div
-            className="aspect-[16/10] relative overflow-hidden"
-            style={{ background: item.thumbnailGradient }}
+            className="aspect-[16/10] relative overflow-hidden bg-line-soft"
+            style={item.thumbnailGradient ? { background: item.thumbnailGradient } : undefined}
           >
-            <div className="absolute inset-0 flex items-end p-4">
+            {item.kind === 'photo' ? (
+              <img
+                src={item.mediaUrl}
+                alt={item.title}
+                loading="lazy"
+                className="absolute inset-0 w-full h-full object-cover"
+              />
+            ) : (
+              <video
+                src={item.mediaUrl}
+                preload="metadata"
+                muted
+                playsInline
+                className="absolute inset-0 w-full h-full object-cover"
+              />
+            )}
+
+            <div className="absolute inset-0 flex items-end p-4 pointer-events-none bg-gradient-to-t from-black/40 via-transparent to-transparent">
               <div className="flex gap-2">
                 <Badge tone={item.kind === 'video' ? 'accent' : 'primary'}>
                   {item.kind === 'video' ? 'Видео' : 'Фото'}
@@ -29,8 +51,9 @@ export function GalleryCard({ item, index = 0 }: GalleryCardProps) {
                 <Badge tone="muted">{item.modelName}</Badge>
               </div>
             </div>
+
             {item.kind === 'video' && (
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-white/85 flex items-center justify-center shadow-lg">
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-white/85 flex items-center justify-center shadow-lg pointer-events-none">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" className="text-primary-deep ml-1">
                   <path d="M8 5v14l11-7z" />
                 </svg>
@@ -46,9 +69,14 @@ export function GalleryCard({ item, index = 0 }: GalleryCardProps) {
               <span>
                 Лиц: <span className="text-ink">{item.stats.faces}</span>
               </span>
-              {item.stats.duration && (
+              {item.stats.duration !== undefined && (
                 <span>
-                  Длит.: <span className="text-ink">{item.stats.duration.toFixed(1)} с</span>
+                  Длит.: <span className="text-ink">{item.stats.duration.toFixed(0)} с</span>
+                </span>
+              )}
+              {item.stats.confidence !== undefined && (
+                <span>
+                  Увер.: <span className="text-ink">{item.stats.confidence.toFixed(1)}%</span>
                 </span>
               )}
               <span className="text-primary-deep font-sans font-medium">Открыть →</span>
