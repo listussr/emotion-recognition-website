@@ -39,6 +39,17 @@ class Settings(BaseSettings):
     processing_max_short_side: int = 720
     video_frame_decimation: int = 2
     bbox_smoothing_alpha: float = 0.9
+
+    bytetrack_track_thresh: float = 0.5
+    bytetrack_match_thresh: float = 0.4
+    bytetrack_track_buffer: int = 360
+    bytetrack_new_track_thresh: float = 0.6
+    bytetrack_min_hits_to_confirm: int = 2
+
+
+    bytetrack_reid_threshold: float = 0.3
+    bytetrack_gallery_size: int = 15
+    emotion_ema_alpha: float = 0.75
     reid_similarity_active: float = 0.37
     reid_similarity_gallery: float = 0.42
     embedding_store_threshold: float = 0.42
@@ -47,7 +58,6 @@ class Settings(BaseSettings):
     pose_yaw_max: float = 0.25
     pose_roll_max: float = 20.0
     pose_min_face_px: int = 60
-    emotion_ema_alpha: float = 0.75
 
     class Config:
         env_file = '.env'
