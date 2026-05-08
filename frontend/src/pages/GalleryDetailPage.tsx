@@ -2,7 +2,7 @@ import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { getGalleryItem } from '../data/gallery';
 import { Badge } from '../components/ui/Badge';
-import { Button, LinkButton } from '../components/ui/Button';
+import { LinkButton } from '../components/ui/Button';
 import NotFoundPage from './NotFoundPage';
 
 export default function GalleryDetailPage() {
@@ -40,26 +40,21 @@ export default function GalleryDetailPage() {
 
       <div className="mt-8 grid gap-6 md:grid-cols-[1fr_300px]">
         <div className="card overflow-hidden">
-          <div
-            className="aspect-video relative flex items-center justify-center"
-            style={{ background: item.thumbnailGradient }}
-          >
-            <div className="text-center text-white/90">
-              <div className="text-sm font-mono uppercase tracking-wider opacity-75">
-                Плейсхолдер
-              </div>
-              <div className="mt-1 text-base font-display">
-                Демо-медиа будет подгружено позднее
-              </div>
-            </div>
-            {item.kind === 'video' && (
-              <div className="absolute w-16 h-16 rounded-full bg-white/90 flex items-center justify-center shadow-xl">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" className="text-primary-deep ml-1">
-                  <path d="M8 5v14l11-7z" />
-                </svg>
-              </div>
-            )}
-          </div>
+          {item.kind === 'photo' ? (
+            <img
+              src={item.mediaUrl}
+              alt={item.title}
+              className="w-full max-h-[640px] object-contain bg-black"
+            />
+          ) : (
+            <video
+              src={item.mediaUrl}
+              controls
+              preload="metadata"
+              playsInline
+              className="w-full max-h-[640px] object-contain bg-black"
+            />
+          )}
         </div>
 
         <div className="flex flex-col gap-4">
@@ -70,31 +65,50 @@ export default function GalleryDetailPage() {
                 <dt className="text-ink-muted">Лиц в сессии</dt>
                 <dd className="font-mono text-ink">{item.stats.faces}</dd>
               </div>
-              {item.stats.duration && (
+              {item.stats.duration !== undefined && (
                 <div className="flex justify-between">
                   <dt className="text-ink-muted">Длительность</dt>
-                  <dd className="font-mono text-ink">{item.stats.duration.toFixed(1)} с</dd>
+                  <dd className="font-mono text-ink">{item.stats.duration.toFixed(0)} с</dd>
                 </div>
               )}
               <div className="flex justify-between">
                 <dt className="text-ink-muted">Доминант</dt>
                 <dd className="font-medium text-ink">{item.stats.dominantEmotion}</dd>
               </div>
+              {item.stats.confidence !== undefined && (
+                <div className="flex justify-between">
+                  <dt className="text-ink-muted">Уверенность</dt>
+                  <dd className="font-mono text-ink">{item.stats.confidence.toFixed(1)}%</dd>
+                </div>
+              )}
               <div className="flex justify-between">
                 <dt className="text-ink-muted">Модель</dt>
                 <dd className="font-medium text-ink">{item.modelName}</dd>
               </div>
             </dl>
+            {item.stats.note && (
+              <p className="mt-4 pt-4 border-t border-line text-xs text-ink-muted leading-relaxed">
+                {item.stats.note}
+              </p>
+            )}
           </div>
 
           <div className="flex flex-col gap-2">
-            <Button variant="secondary" disabled>
+            <a
+              href={item.mediaUrl}
+              download
+              className="btn-secondary text-center"
+            >
               Скачать {item.kind === 'video' ? 'видео' : 'изображение'}
-            </Button>
-            {item.kind === 'video' && (
-              <Button variant="secondary" disabled>
+            </a>
+            {item.kind === 'video' && item.statisticsUrl && (
+              <a
+                href={item.statisticsUrl}
+                download
+                className="btn-secondary text-center"
+              >
                 Скачать статистику
-              </Button>
+              </a>
             )}
             <LinkButton variant="primary" to={`/process/${item.kind}?model=${item.model}`}>
               Попробовать на своём медиа
@@ -102,6 +116,23 @@ export default function GalleryDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Для видео — встраиваем готовую Plotly-статистику ниже плеера. */}
+      {item.kind === 'video' && item.statisticsUrl && (
+        <section className="mt-10">
+          <h2 className="text-xl md:text-2xl font-display font-semibold text-ink mb-4">
+            Статистика по трекам
+          </h2>
+          <div className="card overflow-hidden">
+            <iframe
+              src={item.statisticsUrl}
+              title={`Статистика — ${item.title}`}
+              className="w-full"
+              style={{ height: '1400px', border: 'none' }}
+            />
+          </div>
+        </section>
+      )}
     </motion.div>
   );
 }

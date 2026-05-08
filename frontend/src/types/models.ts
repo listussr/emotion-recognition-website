@@ -25,12 +25,21 @@ export interface GalleryItem {
   kind: 'photo' | 'video';
   model: ModelKey;
   modelName: string;
-  thumbnailGradient: string;
   description: string;
+  /** URL результирующего изображения / видео в /public/demo_data/... */
+  mediaUrl: string;
+  /** Для видео — URL статистической HTML-страницы из пайплайна. */
+  statisticsUrl?: string;
+  /** Опциональный фолбэк-градиент для thumbnail. */
+  thumbnailGradient?: string;
   stats: {
     duration?: number;
     faces: number;
     dominantEmotion: string;
+    /** Для фото — уверенность модели в доминирующей эмоции, %. */
+    confidence?: number;
+    /** Для видео — дополнительный комментарий (например, что демонстрирует). */
+    note?: string;
   };
 }
 

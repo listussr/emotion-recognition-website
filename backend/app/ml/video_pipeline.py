@@ -15,7 +15,7 @@ from typing import Dict, List, Literal, Optional
 _PROFILE = os.environ.get('PIPELINE_PROFILE', '0') == '1'
 
 from app.config import settings
-from app.ml.byte_tracker import Tracker  # ByteTrack-обёртка под старый интерфейс
+from app.ml.byte_tracker import Tracker
 from app.ml.visualizer import annotate_frame
 from app.ml.visualizer import LEGEND_WIDTH
 from app.ml.image_pipeline import pipeline_image
