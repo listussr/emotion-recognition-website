@@ -77,6 +77,16 @@ docker compose down -v
 
 Подробности и тонкости — в [`DOCKER.md`](DOCKER.md).
 
+## Деплой на сервер
+
+Пошаговый план развёртывания на VPS (Ubuntu + Docker + Caddy с автоматическим
+HTTPS) с чек-апами на каждом шаге — в [`DEPLOY.md`](DEPLOY.md). Продакшен-стек
+поднимается прод-оверлеем:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
+
 ## Что умеет
 
 - Принимает **фото** (jpg/jpeg/png, до 50 МБ) и **видео** (mp4/mov/avi, до 50 МБ и 30 сек).

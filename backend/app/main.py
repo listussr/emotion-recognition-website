@@ -13,3 +13,9 @@ app.add_middleware(
 
 app.include_router(photo.router,  prefix="/api/photo")
 app.include_router(video.router, prefix="/api/video")
+
+
+@app.get("/health")
+def health() -> dict:
+    """Лёгкий liveness-пробник для Docker healthcheck и reverse-proxy."""
+    return {"status": "ok"}

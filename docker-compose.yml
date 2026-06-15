@@ -37,6 +37,12 @@ services:
         condition: service_healthy
     expose:
       - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     command: >
       uvicorn app.main:app
       --host 0.0.0.0 --port 8000
@@ -70,8 +76,11 @@ services:
       context: ./frontend
     image: emotion-frontend:latest
     restart: unless-stopped
-    ports:
-      - "8080:80"
+    # Порт наружу НЕ публикуется здесь намеренно:
+    #  - в dev/демо его публикует docker-compose.override.yml (8080:80, подхватывается автоматически);
+    #  - в проде наружу торчит только Caddy (80/443), а до frontend он ходит по внутренней сети.
+    expose:
+      - "80"
     depends_on:
       - backend
 
