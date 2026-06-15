@@ -1,0 +1,63 @@
+# Продакшен-оверлей.
+# ---
+# Запуск (из корня репозитория):
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+# Остановка:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml down
+#
+# Что добавляет относительно базового compose:
+#   - caddy        — reverse-proxy на 80/443 с автоматическим HTTPS (Let's Encrypt);
+#   - DEBUG=False  — для backend и worker;
+#   - лимиты RAM   — чтобы один сервис не уронил весь сервер;
+#   - наружу публикуется ТОЛЬКО Caddy. frontend/backend/redis видны лишь внутри сети.
+#
+# Домен задаётся переменной SITE_ADDRESS (см. .env.example):
+#   - задан (example.com)  → Caddy сам выпустит и продлит TLS-сертификат;
+#   - пуст / не задан       → Caddy отдаёт сайт по HTTP на :80 (доступ по IP).
+
+services:
+  redis:
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  backend:
+    environment:
+      DEBUG: "False"
+    deploy:
+      resources:
+        limits:
+          memory: 1536m
+
+  worker:
+    environment:
+      DEBUG: "False"
+      # В проде убираем подробный профайлинг пайплайна из логов.
+      PIPELINE_PROFILE: "0"
+    deploy:
+      resources:
+        limits:
+          memory: 5g
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - frontend
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      # Подставляется docker compose из shell-окружения или файла .env.
+      # Если переменная не задана — дефолт ":80" (HTTP на всех интерфейсах).
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  caddy-data:
+  caddy-config:

@@ -1,0 +1,16 @@
+# Caddy-конфиг для продакшена (используется docker-compose.prod.yml).
+# ---
+# {$SITE_ADDRESS::80} — адрес сайта из переменной окружения SITE_ADDRESS,
+# с дефолтом ":80", если она пуста:
+#   SITE_ADDRESS=example.com → Caddy автоматически выпустит TLS (HTTPS) и
+#                              будет редиректить HTTP→HTTPS;
+#   SITE_ADDRESS не задан     → сайт по HTTP на :80 (доступ по IP сервера).
+#
+# Caddy проксирует всё на контейнер frontend (nginx со статикой SPA),
+# который уже сам проксирует /api/ на backend. То есть цепочка:
+#   браузер → caddy (TLS) → frontend (nginx) → backend (uvicorn).
+
+{$SITE_ADDRESS::80} {
+	encode gzip zstd
+	reverse_proxy frontend:80
+}
